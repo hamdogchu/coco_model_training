@@ -28,13 +28,12 @@ def run_training():
     RESUME_TRAINING = False  
     START_EPOCH = 1          
     
-    DATA_DIR = "/content/dataset/images"
-    ANNOTATION_FILE = "/content/dataset/annotations.json"
+    # UPDATE THESE TWO LINES
+    DATA_DIR = "/content/dataset/train"
+    ANNOTATION_FILE = "/content/dataset/train/_annotations.coco.json"
     
-    # UPDATED: Cloud storage paths
+    # Cloud storage paths pointing to the EXCESS directory
     TEACHER_WEIGHTS = "/content/drive/MyDrive/EXCESS/lettuce_project/teacher_resnet101.pth"
-    CHECKPOINT_DIR = "/content/drive/MyDrive/EXCESS/lettuce_project/checkpoints"
-    os.makedirs(CHECKPOINT_DIR, exist_ok=True)
 
     dataset = LettuceDetectionDataset(root_dir=DATA_DIR, annotation_file=ANNOTATION_FILE)
     dataloader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=True, 

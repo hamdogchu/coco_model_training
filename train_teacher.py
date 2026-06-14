@@ -12,11 +12,10 @@ def train_teacher():
     BATCH_SIZE = 4       
     EPOCHS = 20
     
-    # Local paths for the fast SSD
-    DATA_DIR = "/content/dataset/images"
-    ANNOTATION_FILE = "/content/dataset/annotations.json"
+    # UPDATE THESE TWO LINES
+    DATA_DIR = "/content/dataset/train"
+    ANNOTATION_FILE = "/content/dataset/train/_annotations.coco.json"
     
-    # UPDATED: Target directory in Drive
     CHECKPOINT_DIR = "/content/drive/MyDrive/EXCESS/lettuce_project/"
     os.makedirs(CHECKPOINT_DIR, exist_ok=True)
     
