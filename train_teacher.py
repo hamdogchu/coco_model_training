@@ -1,5 +1,5 @@
 import os
-import json   # <--- Make sure to import json at the top
+import json
 import torch
 from torch.utils.data import DataLoader
 from dataset import LettuceDetectionDataset, collate_fn
@@ -9,7 +9,7 @@ def train_teacher():
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"Training Teacher on: {device}")
     
-    # Local paths for the fast SSD
+    # Local paths for the fast SSD (Updated for Roboflow structure)
     DATA_DIR = "/content/dataset/train"
     ANNOTATION_FILE = "/content/dataset/train/_annotations.coco.json"
     
@@ -24,14 +24,17 @@ def train_teacher():
     BATCH_SIZE = 4       
     EPOCHS = 20
     
+    # Target directory in your specific Drive path
     CHECKPOINT_DIR = "/content/drive/MyDrive/EXCESS/lettuce_project/"
     os.makedirs(CHECKPOINT_DIR, exist_ok=True)
     
     dataset = LettuceDetectionDataset(root_dir=DATA_DIR, annotation_file=ANNOTATION_FILE)
-    dataloader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=True, 
-                            num_workers=2, collate_fn=collate_fn)
     
-    # The rest of your script remains exactly the same below this point...
+    # Prevent PyTorch deadlocks by setting num_workers=0
+    dataloader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=True, 
+                            num_workers=0, collate_fn=collate_fn)
+    
+    # Initialize the heavy ResNet-101 and ensure it is set to train
     teacher = get_teacher_model(NUM_CLASSES, pretrained_weights_path=None).to(device)
     teacher.train()
     for param in teacher.parameters():
@@ -42,7 +45,12 @@ def train_teacher():
     for epoch in range(EPOCHS):
         epoch_loss = 0.0
         
-        for images, targets in dataloader:
+        for batch_idx, (images, targets) in enumerate(dataloader):
+            # --- HEARTBEAT LOG ---
+            if batch_idx % 10 == 0:
+                print(f"Processing Epoch {epoch+1}, Batch {batch_idx}/{len(dataloader)}...")
+            # ---------------------
+            
             images = list(img.to(device) for img in images)
             targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
             
