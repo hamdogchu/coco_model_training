@@ -18,7 +18,7 @@ def train_teacher():
         NUM_CLASSES = max([cat['id'] for cat in coco_data['categories']]) + 1
         print(f"Dynamically detected {NUM_CLASSES} total classes.")
     
-    BATCH_SIZE = 4       
+    BATCH_SIZE = 8     
     
     # --- SESSION RECOVERY CONTROLS ---
     TOTAL_EPOCHS = 20
