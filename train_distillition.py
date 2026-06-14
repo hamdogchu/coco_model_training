@@ -31,7 +31,7 @@ def run_training():
     DATA_DIR = "/content/dataset/images"
     ANNOTATION_FILE = "/content/dataset/annotations.json"
     
-    # Cloud storage paths pointing to the EXCESS directory
+    # UPDATED: Cloud storage paths
     TEACHER_WEIGHTS = "/content/drive/MyDrive/EXCESS/lettuce_project/teacher_resnet101.pth"
     CHECKPOINT_DIR = "/content/drive/MyDrive/EXCESS/lettuce_project/checkpoints"
     os.makedirs(CHECKPOINT_DIR, exist_ok=True)
