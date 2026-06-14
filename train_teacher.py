@@ -1,4 +1,5 @@
 import os
+import json   # <--- Make sure to import json at the top
 import torch
 from torch.utils.data import DataLoader
 from dataset import LettuceDetectionDataset, collate_fn
@@ -8,13 +9,20 @@ def train_teacher():
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"Training Teacher on: {device}")
     
-    NUM_CLASSES = 3 
-    BATCH_SIZE = 4       
-    EPOCHS = 20
-    
-    # UPDATE THESE TWO LINES
+    # Local paths for the fast SSD
     DATA_DIR = "/content/dataset/train"
     ANNOTATION_FILE = "/content/dataset/train/_annotations.coco.json"
+    
+    # --- DYNAMIC CLASS DETECTION ---
+    with open(ANNOTATION_FILE, 'r') as f:
+        coco_data = json.load(f)
+        # Find the highest category ID used by Roboflow and add 1 for the background class
+        NUM_CLASSES = max([cat['id'] for cat in coco_data['categories']]) + 1
+        print(f"Dynamically detected {NUM_CLASSES} total classes (including background).")
+    # -------------------------------
+    
+    BATCH_SIZE = 4       
+    EPOCHS = 20
     
     CHECKPOINT_DIR = "/content/drive/MyDrive/EXCESS/lettuce_project/"
     os.makedirs(CHECKPOINT_DIR, exist_ok=True)
@@ -23,6 +31,7 @@ def train_teacher():
     dataloader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=True, 
                             num_workers=2, collate_fn=collate_fn)
     
+    # The rest of your script remains exactly the same below this point...
     teacher = get_teacher_model(NUM_CLASSES, pretrained_weights_path=None).to(device)
     teacher.train()
     for param in teacher.parameters():

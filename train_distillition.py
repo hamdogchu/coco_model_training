@@ -1,4 +1,5 @@
 import os
+import json  # <--- Added JSON import
 import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
@@ -19,7 +20,21 @@ def run_training():
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"Executing on: {device}")
     
-    NUM_CLASSES = 3          
+    # Cloud storage paths pointing to the EXCESS directory
+    DATA_DIR = "/content/dataset/train"
+    ANNOTATION_FILE = "/content/dataset/train/_annotations.coco.json"
+    TEACHER_WEIGHTS = "/content/drive/MyDrive/EXCESS/lettuce_project/teacher_resnet101.pth"
+    CHECKPOINT_DIR = "/content/drive/MyDrive/EXCESS/lettuce_project/checkpoints"
+    os.makedirs(CHECKPOINT_DIR, exist_ok=True)
+
+    # --- DYNAMIC CLASS DETECTION ---
+    with open(ANNOTATION_FILE, 'r') as f:
+        coco_data = json.load(f)
+        # Find the highest category ID used by Roboflow and add 1 for the background class
+        NUM_CLASSES = max([cat['id'] for cat in coco_data['categories']]) + 1
+        print(f"Dynamically detected {NUM_CLASSES} total classes (including background).")
+    # -------------------------------
+    
     BATCH_SIZE = 2           
     ACCUMULATION_STEPS = 8   
     ALPHA = 0.4              
@@ -27,13 +42,6 @@ def run_training():
     TOTAL_EPOCHS = 20
     RESUME_TRAINING = False  
     START_EPOCH = 1          
-    
-    # UPDATE THESE TWO LINES
-    DATA_DIR = "/content/dataset/train"
-    ANNOTATION_FILE = "/content/dataset/train/_annotations.coco.json"
-    
-    # Cloud storage paths pointing to the EXCESS directory
-    TEACHER_WEIGHTS = "/content/drive/MyDrive/EXCESS/lettuce_project/teacher_resnet101.pth"
 
     dataset = LettuceDetectionDataset(root_dir=DATA_DIR, annotation_file=ANNOTATION_FILE)
     dataloader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=True, 
