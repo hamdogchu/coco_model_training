@@ -22,8 +22,8 @@ def train_teacher():
     
     # --- SESSION RECOVERY CONTROLS ---
     TOTAL_EPOCHS = 20
-    RESUME_TRAINING = False  # Change to True if you need to resume after a crash
-    START_EPOCH = 1          # Change to the next epoch number (e.g., if epoch 5 finished, set to 6)
+    RESUME_TRAINING = True  # Change to True if you need to resume after a crash
+    START_EPOCH = 3        # Change to the next epoch number (e.g., if epoch 5 finished, set to 6)
     
     CHECKPOINT_DIR = "/content/drive/MyDrive/EXCESS/lettuce_project/checkpoints"
     os.makedirs(CHECKPOINT_DIR, exist_ok=True)
