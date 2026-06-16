@@ -25,7 +25,7 @@ def run_training():
     # Cloud storage and local dataset paths
     DATA_DIR = "/content/dataset/train"
     ANNOTATION_FILE = "/content/dataset/train/_annotations.coco.json"
-    TEACHER_WEIGHTS = "/content/drive/MyDrive/EXCESS/lettuce_project/teacher_resnet101.pth"
+    TEACHER_WEIGHTS = "/content/drive/MyDrive/EXCESS/lettuce_project/checkpoints/teacher_resnet101_epoch_20.pth"
     CHECKPOINT_DIR = "/content/drive/MyDrive/EXCESS/lettuce_project/checkpoints"
     os.makedirs(CHECKPOINT_DIR, exist_ok=True)
 
