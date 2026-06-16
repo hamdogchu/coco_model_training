@@ -36,7 +36,7 @@ def run_training():
         print(f"Dynamically detected {NUM_CLASSES} total classes (including background).")
     
     # Hyperparameters for T4 GPU Optimization
-    BATCH_SIZE = 2           
+    BATCH_SIZE = 4          
     ACCUMULATION_STEPS = 8   
     ALPHA = 0.4              
     
