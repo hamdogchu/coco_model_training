@@ -42,8 +42,8 @@ def run_training():
     
     # --- SESSION RECOVERY CONTROLS ---
     TOTAL_EPOCHS = 20
-    RESUME_TRAINING = False  # Change to True if you need to resume after a crash
-    START_EPOCH = 1          # Change to the next epoch number if resuming (e.g., 12)
+    RESUME_TRAINING = True  # Change to True if you need to resume after a crash
+    START_EPOCH = 6      # Change to the next epoch number if resuming (e.g., 12)
 
     dataset = LettuceDetectionDataset(root_dir=DATA_DIR, annotation_file=ANNOTATION_FILE)
     
