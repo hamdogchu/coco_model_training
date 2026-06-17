@@ -1,136 +1,113 @@
+import serial
 import time
 import cv2
-import os
-from datetime import datetime
-import RPi.GPIO as GPIO
-from supabase import create_client, Client
 
-# --- Supabase Configuration ---
-SUPABASE_URL = "YOUR_ACTUAL_SUPABASE_URL"
-SUPABASE_KEY = "YOUR_ACTUAL_ANON_KEY"
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+# --- Serial Configuration ---
+# You will need to change this to the actual port your Pico connects to.
+# On Windows, it will be something like 'COM3'. On a Raspberry Pi/Linux, it is usually '/dev/ttyACM0' or '/dev/ttyUSB0'
+SERIAL_PORT = '/dev/ttyACM0' 
+BAUD_RATE = 115200
 
-# --- Motor Pin Configuration ---
-DIR_X = 20
-STEP_X = 21
-DIR_Y = 19
-STEP_Y = 26
+# Open the serial connection to the Pico
+try:
+    pico = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=1)
+    # Wake up grblHAL
+    pico.write(b"\r\n\r\n")
+    time.sleep(2)
+    pico.flushInput()
+    print("Connected to grblHAL on Pico.")
+except Exception as e:
+    print(f"Failed to connect to Pico: {e}")
+    exit()
 
-# --- Timing & Calibration ---
-STEP_DELAY = 0.001 
-STEPS_PER_MM = 25
-NUM_PLANTS = 14
-INTERVAL_SECONDS = 1800 # 30 minutes
+# --- Plant Coordinates (G-code strings) ---
+# --- Plant Coordinates (G-code strings) ---
+PLANT_GCODE = [
+    "G90",          # Enforce absolute coordinate mode
+    "G0 X0 Y0",     # Plant 1 / Home Start
+    "G0 X5 Y150",   # Plant 2
+    "G0 X10 Y350",  # Plant 3
+    "G0 X15 Y510",  # Plant 4
+    "G0 X20 Y670",  # Plant 5
+    "G0 X150 Y600", # Plant 6
+    "G0 X150 Y450", # Plant 7
+    "G0 X150 Y260", # Plant 8
+    "G0 X150 Y120", # Plant 9
+    "G0 X290 Y0",   # Plant 10
+    "G0 X290 Y150", # Plant 11
+    "G0 X290 Y350", # Plant 12
+    "G0 X290 Y510", # Plant 13
+    "G0 X290 Y690"  # Plant 14
+]
 
-PLANT_COORDINATES = {
-    1:  (50, 50),   2:  (150, 50),   3:  (250, 50),   4:  (350, 50),
-    5:  (450, 50),  6:  (550, 50),   7:  (650, 50),   
-    8:  (50, 150),  9:  (150, 150),  10: (250, 150),  11: (350, 150),
-    12: (450, 150), 13: (550, 150),  14: (650, 150)
-}
-
-current_x_mm = 0
-current_y_mm = 0
-
-def setup_gpio():
-    GPIO.setmode(GPIO.BCM)
-    GPIO.setwarnings(False)
-    GPIO.setup([DIR_X, STEP_X, DIR_Y, STEP_Y], GPIO.OUT)
-    GPIO.output([DIR_X, STEP_X, DIR_Y, STEP_Y], GPIO.LOW)
-
-def step_motor(dir_pin, step_pin, steps, direction_high):
-    GPIO.output(dir_pin, GPIO.HIGH if direction_high else GPIO.LOW)
-    for _ in range(abs(int(steps))):
-        GPIO.output(step_pin, GPIO.HIGH)
-        time.sleep(STEP_DELAY)
-        GPIO.output(step_pin, GPIO.LOW)
-        time.sleep(STEP_DELAY)
-
-def move_to_plant(position_index):
-    global current_x_mm, current_y_mm
-    target_x, target_y = PLANT_COORDINATES[position_index]
-    
-    steps_x = (target_x - current_x_mm) * STEPS_PER_MM
-    steps_y = (target_y - current_y_mm) * STEPS_PER_MM
-    
-    print(f"Moving to Plant {position_index}...")
-    if steps_x != 0: step_motor(DIR_X, STEP_X, steps_x, direction_high=(steps_x > 0))
-    if steps_y != 0: step_motor(DIR_Y, STEP_Y, steps_y, direction_high=(steps_y > 0))
+def wait_for_idle():
+    """
+    Polls grblHAL to check if the machine is still moving.
+    Blocks the script from taking a picture until the motors have completely stopped.
+    """
+    while True:
+        pico.write(b"?\n")
+        response = pico.readline().decode('utf-8').strip()
         
-    current_x_mm, current_y_mm = target_x, target_y
-    time.sleep(1) # Let camera settle
+        # Look for the status report, e.g., <Idle|MPos:50.000,50.000,0.000>
+        if response.startswith('<Idle'):
+            break
+        time.sleep(0.1)
 
-def return_to_home():
-    global current_x_mm, current_y_mm
-    print("Returning to Home...")
-    steps_x = -current_x_mm * STEPS_PER_MM
-    steps_y = -current_y_mm * STEPS_PER_MM
+def send_gcode(command):
+    """Sends a command to the Pico and waits for it to execute."""
+    print(f"Sending: {command}")
+    pico.write((command + '\n').encode('utf-8'))
     
-    if steps_x != 0: step_motor(DIR_X, STEP_X, steps_x, direction_high=False)
-    if steps_y != 0: step_motor(DIR_Y, STEP_Y, steps_y, direction_high=False)
-        
-    current_x_mm = 0
-    current_y_mm = 0
+    # Wait for the 'ok' acknowledgement from GRBL's buffer
+    while True:
+        response = pico.readline().decode('utf-8').strip()
+        if response == 'ok':
+            break
+            
+    # Wait for physical movement to finish
+    wait_for_idle()
+    
+    # Give the camera gantry 1 second to stop shaking before capturing
+    time.sleep(1)
 
 def capture_image(filename):
+    """Snaps the photo at the current stopped position."""
     cap = cv2.VideoCapture(0)
-    time.sleep(2)
+    time.sleep(2) # Auto-focus
     ret, frame = cap.read()
     if ret:
-        frame_resized = cv2.resize(frame, (1920, 1080))
-        cv2.imwrite(filename, frame_resized)
+        cv2.imwrite(filename, frame)
     cap.release()
+    print(f"Captured: {filename}")
     return ret
 
-def run_student_algorithm(image_path):
-    # TODO: Insert your TFLite model inference here
-    return ["healthy", "disease", "pest"][int(time.time()) % 3] 
-
 def run_wave():
-    print(f"--- Starting Monitoring Wave ---")
+    print("--- Starting Automated Wave ---")
     
-    wave_data = supabase.table('waves').insert({'status': 'monitoring'}).execute()
-    wave_id = wave_data.data[0]['id']
+    # Ensure machine is in absolute positioning mode and millimeters
+    send_gcode("G90") 
+    send_gcode("G21")
     
-    for i in range(1, NUM_PLANTS + 1):
-        move_to_plant(i)
-        img_filename = f"plant_{i}.jpg"
+    for i, gcode in enumerate(PLANT_GCODE, start=1):
+        # 1. Move the machine
+        send_gcode(gcode)
         
-        if capture_image(img_filename):
-            classification = run_student_algorithm(img_filename)
-            storage_path = f"{classification}/{wave_id}_plant_{i}.jpg"
-            
-            with open(img_filename, 'rb') as f:
-                supabase.storage.from_('scans').upload(file=f, path=storage_path, file_options={"content-type": "image/jpeg"})
-            
-            public_url = supabase.storage.from_('scans').get_public_url(storage_path)
-            
-            supabase.table('wave_images').insert({
-                'wave_id': wave_id,
-                'position': i,
-                'classification': classification,
-                'image_url': public_url
-            }).execute()
-            
-            print(f"Plant {i} Processed -> {classification}")
-            os.remove(img_filename)
-
-    return_to_home()
-    
-    supabase.table('waves').update({
-        'status': 'completed',
-        'completed_at': 'now()'
-    }).eq('id', wave_id).execute()
-    print("Wave complete.")
+        # 2. Machine is confirmed stopped, take the photo
+        img_filename = f"plant_{i}.jpg"
+        capture_image(img_filename)
+        
+        # 3. TODO: Run your Supabase database upload logic here
+        
+    print("Wave complete. Returning to home.")
+    send_gcode("G0 X0 Y0")
 
 if __name__ == "__main__":
-    setup_gpio()
     try:
-        while True:
-            run_wave()
-            print("Waiting 30 minutes...")
-            time.sleep(INTERVAL_SECONDS)
+        run_wave()
     except KeyboardInterrupt:
-        print("Script stopped by user.")
+        print("Stopping machine!")
+        # Send a feed hold / stop command to GRBL in an emergency
+        pico.write(b"!") 
     finally:
-        GPIO.cleanup()
+        pico.close()
