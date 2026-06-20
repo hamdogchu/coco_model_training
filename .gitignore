@@ -1,0 +1,8 @@
+.git/
+.venv/
+myenv/
+processed_captures/
+__pycache__/
+sample\ captured/
+wave_captures/
+lettuce_student_resnet18.onnx

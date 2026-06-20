@@ -2,12 +2,12 @@ import serial
 import time
 import sys
 import os
-import cv2  # New library for camera capture
+from capture_4k_img import capture_image
 
 # --- Configuration ---
 SERIAL_PORT = '/dev/ttyACM0' 
 BAUD_RATE = 115200
-CAPTURE_DIR = 'wave_captures'
+CAP_DIR = 'wave_captures'
 
 setup_commands = [
     "G21", # millimeters
@@ -32,16 +32,6 @@ coordinates = [
     ("X290", "Y510"),
     ("X290", "Y670")   
 ]
-
-def capture_image(cap, plant_number):
-    """Captures a frame from the camera and saves it to the designated folder."""
-    ret, frame = cap.read()
-    if ret:
-        filename = os.path.join(CAPTURE_DIR, f"plant_{plant_number}.jpg")
-        cv2.imwrite(filename, frame)
-        print(f"[Camera] Image successfully saved: {filename}")
-    else:
-        print(f"[Camera] Error: Could not read frame for plant {plant_number}. Check camera connection.")
 
 def wait_for_idle(ser):
     """Polls grblHAL to pause Python until the physical movement stops."""
@@ -77,17 +67,10 @@ def send_command(ser, cmd):
             print(f"GRBL Error: {line}")
             break
 
-def main():
+def run_hardware_sequence(CAPTURE_DIR=CAP_DIR):
     # 1. Setup Camera and Directory
     os.makedirs(CAPTURE_DIR, exist_ok=True)
-    print("Initializing Camera...")
-    
-    # '0' is the default index for USB webcams or the main Pi Camera
-    cap = cv2.VideoCapture(0) 
-    if not cap.isOpened():
-        print("Error: Could not open the camera.")
-        sys.exit(1)
-        
+
     time.sleep(2) # Give the camera sensor time to warm up and auto-expose
     
     try:
@@ -123,7 +106,10 @@ def main():
                     send_command(ser, "G4 P2")
 
                     # C. Take the picture
-                    capture_image(cap, i)
+                    #setup
+                    #v4l2-ctl --list-formats-ext
+                    capture_image(CAPTURE_DIR, filename=f"plant_{i}", resolution="2592x1944", img_type="raw")
+                    print(f"capturing plant_{i}")
                     
                     # E. Wait out the dwell time before looping
                     wait_for_idle(ser)
@@ -132,8 +118,7 @@ def main():
                 send_command(ser, "G0 X0 Y0")
                 wait_for_idle(ser)
                 
-                print("\nSequence complete.")
-
+             
             except KeyboardInterrupt:
                 print("\n\n[!] Ctrl+C detected! Triggering grblHAL Soft Reset...")
                 ser.write(b'\x18')
@@ -141,17 +126,13 @@ def main():
                 time.sleep(0.5) 
                 print("Motors halted. Buffer cleared.")
                 sys.exit(0)
-
+            print("\nSequence complete.")
     except serial.SerialException as e:
         print(f"\nSerial Error: {e}")
         print("Hint: Check if your Pico is connected and the port matches.")
         sys.exit(1)
         
-    finally:
-        # ALWAYS release the camera when the script ends, even if it crashes
-        cap.release()
-        cv2.destroyAllWindows()
-        print("Camera released safely.")
 
 if __name__ == "__main__":
-    main()
+    run_hardware_sequence()
+    
