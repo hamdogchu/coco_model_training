@@ -13,24 +13,25 @@ setup_commands = [
     "G21", # millimeters
     "G90", # absolute coordinate
     "G17", # XY plane
-    "G94"  # units per minute feed rate mode
+    "G94",  # units per minute feed rate mode
+    "G92 X0 Y0" #machine think its in zero
 ]
 
 coordinates = [
     ("X0", "Y0"),      
-    ("X5", "Y150"),
-    ("X10", "Y350"),
-    ("X15", "Y510"),
-    ("X20", "Y670"),
-    ("X150", "Y600"),
-    ("X150", "Y450"),
-    ("X150", "Y260"),
-    ("X150", "Y120"),
-    ("X290", "Y0"),
-    ("X290", "Y150"),
-    ("X290", "Y350"),
-    ("X290", "Y510"),
-    ("X290", "Y670")   
+    ("X0", "Y150"),
+    ("X0", "Y350"),
+    ("X0", "Y510"),
+    ("X0", "Y670"),
+    ("X120", "Y600"),
+    ("X120", "Y450"),
+    ("X120", "Y260"),
+    ("X120", "Y120"),
+    ("X260", "Y0"),
+    ("X260", "Y150"),
+    ("X260", "Y350"),
+    ("X260", "Y510"),
+    ("X260", "Y670") 
 ]
 
 def wait_for_idle(ser):

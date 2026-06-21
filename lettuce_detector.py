@@ -3,7 +3,7 @@ import numpy as np
 import onnxruntime as ort
 
 class LettuceDetector:
-    def __init__(self, model_path, conf_threshold=0.5, crop_w=2000, crop_h=2000):
+    def __init__(self, model_path, conf_threshold=0.5, crop_w=1000, crop_h=1000):
         """
         Initializes the detector. Do this ONLY ONCE when your main.py starts up.
         """

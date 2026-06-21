@@ -6,3 +6,7 @@ __pycache__/
 sample\ captured/
 wave_captures/
 lettuce_student_resnet18.onnx
+token.json
+local_settings.json
+credentials.json
+gdrive_credentials.json

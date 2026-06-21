@@ -1,8 +1,7 @@
 import os
 import cv2
 from lettuce_detector import LettuceDetector
-from supabase_uploader import WaveUploader
-
+from supabase_uploader import CloudUploader
 
 def run_batch_inference(input_dir, output_dir, model_path="lettuce_student_resnet18.onnx", is_yuyv=False):
     os.makedirs(output_dir, exist_ok=True)
@@ -16,7 +15,7 @@ def run_batch_inference(input_dir, output_dir, model_path="lettuce_student_resne
         return {} # Return an empty dictionary if no images
 
     print(f"\n[Batch Processor] Waking up AI. Processing {len(image_paths)} images...")
-    detector = LettuceDetector(model_path=model_path, conf_threshold=0.5, crop_w=2000, crop_h=2000)
+    detector = LettuceDetector(model_path=model_path, conf_threshold=0.5, crop_w=1000, crop_h=1000)
 
     # Dictionary to hold the detection data for the database
     wave_results = {}
@@ -65,7 +64,7 @@ if __name__ == "__main__":
                     is_yuyv=False 
                 )
     print("\n[PHASE 3] Syncing to Supabase Cloud...")
-    uploader = WaveUploader(
+    uploader = CloudUploader(
         supabase_url='https://eiqtrqnioobwslzntkdo.supabase.co', 
         supabase_key='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVpcXRycW5pb29id3Nsem50a2RvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA4OTk1NDMsImV4cCI6MjA5NjQ3NTU0M30.cUNW3nWp3D6iO2IjLsq1-8zLNz4_3i1bgEe8dy6Dyag', 
         bucket_name='scans'

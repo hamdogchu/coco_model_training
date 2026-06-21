@@ -2,141 +2,126 @@ import os
 import re
 from datetime import datetime, timezone
 from supabase import create_client, Client
+from google.auth.transport.requests import Request
+from google.oauth2.credentials import Credentials
+from google_auth_oauthlib.flow import InstalledAppFlow
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaFileUpload
 
-class WaveUploader:
-    def __init__(self, supabase_url, supabase_key, bucket_name="scans", max_storage_mb=1000):
+# This tells Google we only want permission to edit files created by this app
+SCOPES = ['https://www.googleapis.com/auth/drive.file']
+
+class CloudUploader:
+    def __init__(self, supabase_url, supabase_key, gdrive_folder_id):
         self.supabase: Client = create_client(supabase_url, supabase_key)
-        self.bucket_name = bucket_name
-        self.max_bytes = max_storage_mb * 1024 * 1024
-        self.trigger_threshold = 0.90
-        self.target_threshold = 0.80
+        self.gdrive_folder_id = gdrive_folder_id
+        self.gdrive_active = False
 
-        # Define category lists based on your 15 classes
+        creds = None
+        # The file token.json stores your login session so you only have to log in ONCE.
+        if os.path.exists('token.json'):
+            creds = Credentials.from_authorized_user_file('token.json', SCOPES)
+
+        try:
+            # If there are no valid credentials, pop open a browser window!
+            if not creds or not creds.valid:
+                if creds and creds.expired and creds.refresh_token:
+                    creds.refresh(Request())
+                else:
+                    flow = InstalledAppFlow.from_client_secrets_file('credentials.json', SCOPES)
+                    creds = flow.run_local_server(port=0)
+                
+                # Save the session token for the next time the Pi reboots
+                with open('token.json', 'w') as token:
+                    token.write(creds.to_json())
+
+            self.gdrive_service = build('drive', 'v3', credentials=creds)
+            self.gdrive_active = True
+            print("[GDrive] Authenticated successfully as HUMAN USER.")
+        except Exception as e:
+            print(f"[GDrive] Failed to initialize Google Drive: {e}")
+            print("[!] Make sure 'credentials.json' is in the folder!")
+
         self.diseases = [
             'Anthracnose', 'Bacterial Soft Rot', 'Big Vein', 'Downy Mildew', 
             'Lettuce Mosaic Virus', 'Other Disease', 'Powdery Mildew', 
             'Septoria Leaf Spot', 'Tip Burn'
         ]
-        self.pests = [
-            'Aphid', 'Leaf Miner', 'Other Pests', 'Thrip', 'Whitefly'
-        ]
-
-    def manage_storage(self):
-        """Checks bucket capacity and deletes the oldest files if it exceeds 90%."""
-        print("[Supabase] Checking cloud storage capacity...")
-        try:
-            response = self.supabase.storage.from_(self.bucket_name).list()
-            files = [f for f in response if f['name'] != '.emptyFolderPlaceholder']
-            total_size_bytes = sum(f.get('metadata', {}).get('size', 0) for f in files)
-            capacity_percent = total_size_bytes / self.max_bytes
-            
-            print(f"[Supabase] Current Bucket Usage: {total_size_bytes / (1024*1024):.1f} MB ({capacity_percent * 100:.1f}%)")
-
-            if capacity_percent >= self.trigger_threshold:
-                print(f"[Supabase] Storage over {self.trigger_threshold * 100}%. Initiating cleanup of oldest waves...")
-                files.sort(key=lambda x: x.get('created_at', ''))
-                target_size = self.max_bytes * self.target_threshold
-                files_to_delete = []
-                
-                for f in files:
-                    if total_size_bytes <= target_size:
-                        break 
-                    files_to_delete.append(f['name'])
-                    total_size_bytes -= f.get('metadata', {}).get('size', 0)
-                
-                if files_to_delete:
-                    print(f"[Supabase] Deleting {len(files_to_delete)} old files to free up space...")
-                    self.supabase.storage.from_(self.bucket_name).remove(files_to_delete)
-                    print("[Supabase] Cleanup complete.")
-                    
-        except Exception as e:
-            print(f"[Supabase] Warning: Failed to run storage management: {e}")
+        self.pests = ['Aphid', 'Leaf Miner', 'Other Pests', 'Thrip', 'Whitefly']
 
     def classify_plant(self, detections):
-        """Applies your priority logic: Disease > Pest > Healthy"""
         has_disease = any(d['class'] in self.diseases for d in detections)
         has_pest = any(d['class'] in self.pests for d in detections)
 
-        if has_disease:
-            return 'disease'
-        elif has_pest:
-            return 'pest'
-        else:
-            return 'healthy'
+        if has_disease: return 'disease'
+        elif has_pest: return 'pest'
+        else: return 'healthy'
 
     def upload_wave(self, local_dir, wave_results):
-        # 1. Manage Storage space first
-        self.manage_storage() 
+        if not self.gdrive_active:
+            print("[Error] Google Drive not active. Cannot sync to cloud.")
+            return
 
         image_paths = [f for f in os.listdir(local_dir) if f.lower().endswith(('.jpg', '.png'))]
         if not image_paths:
-            print(f"[Supabase] No images to upload.")
             return
 
-        print("\n[Supabase] Initiating Database and Storage Sync...")
+        print("\n[Cloud Sync] Initiating GDrive Upload & Supabase DB Sync...")
 
-        # --- TIMESTAMP FIX ---
-        # Get the current time in UTC, formatted to an ISO string for Postgres
         now_iso = datetime.now(timezone.utc).isoformat()
-        
-        # 2. Create the Wave record in the Database first
-        wave_data = {
-            "status": "completed",
-            "started_at": now_iso,     # Needed so your Flutter app can sort newest-first
-            "completed_at": now_iso    # Needed so your Flutter app displays the timestamp
-        } 
+        wave_data = {"status": "completed", "started_at": now_iso, "completed_at": now_iso} 
         
         try:
             wave_response = self.supabase.table("waves").insert(wave_data).execute()
             wave_id = wave_response.data[0]['id']
-            print(f"[Supabase] Created Wave ID: {wave_id}")
         except Exception as e:
             print(f"[Supabase] Error creating wave in database: {e}")
             return
 
         wave_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
-        # 3. Process and Upload each image
         for filename in image_paths:
             local_path = os.path.join(local_dir, filename)
             remote_name = f"wave_{wave_timestamp}_{filename}"
             
-            # Upload to Storage Bucket
+            public_url = None
             try:
-                with open(local_path, 'rb') as f:
-                    self.supabase.storage.from_(self.bucket_name).upload(
-                        path=remote_name, 
-                        file=f.read(),
-                        file_options={"content-type": "image/jpeg", "upsert": "true"}
-                    )
+                file_metadata = {'name': remote_name, 'parents': [self.gdrive_folder_id]}
+                media = MediaFileUpload(local_path, mimetype='image/jpeg', resumable=True)
                 
-                # Retrieve the public URL for the database
-                public_url = self.supabase.storage.from_(self.bucket_name).get_public_url(remote_name)
+                file = self.gdrive_service.files().create(
+                    body=file_metadata, media_body=media, fields='id').execute()
+                file_id = file.get('id')
+                
+                self.gdrive_service.permissions().create(
+                    fileId=file_id, body={'type': 'anyone', 'role': 'reader'}, fields='id').execute()
+
+                public_url = f"https://drive.google.com/uc?export=view&id={file_id}"
+                
             except Exception as e:
-                print(f"    [!] Failed to upload {filename} to bucket: {e}")
+                print(f"    [!] Failed to upload {filename} to GDrive: {e}")
                 continue
 
-            # 4. Extract position integer from filename (e.g., "scanned_plant_14.png" -> 14)
+            if not public_url:
+                continue
+
             match = re.search(r'plant_(\d+)', filename)
             position = int(match.group(1)) if match else 0
-
-            # 5. Determine Database Classification
             detections = wave_results.get(filename, [])
             classification = self.classify_plant(detections)
 
-            # 6. Insert Row into wave_images Database
             image_record = {
                 "wave_id": wave_id,
                 "position": position,
                 "classification": classification,
-                "image_url": public_url,
+                "image_url": public_url, 
                 "detections": detections
             }
 
             try:
                 self.supabase.table("wave_images").insert(image_record).execute()
-                print(f" -> DB Sync: Plant {position} | Class: {classification} | Uploaded")
+                print(f" -> DB Sync: Plant {position} | Class: {classification} | GDrive Synced")
             except Exception as e:
-                print(f"    [!] Failed to insert database record for Plant {position}: {e}")
+                print(f"    [!] Failed to insert database record: {e}")
 
-        print("[Supabase] Wave upload and database sync complete.\n")
+        print("[Cloud Sync] Cycle complete.\n")
