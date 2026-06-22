@@ -36,8 +36,8 @@ class LettuceDetector:
 
     def detect(self, original_img, draw_results=False, is_yuyv=False):
         """
-        Receives a cv2 image, scans the center, and returns the detection data.
-        - Set draw_results=True if you want it to return an annotated image as well.
+        Receives a cv2 image, crops it, runs detection, and returns the CROPPED image.
+        - Set draw_results=True if you want it to return an annotated image.
         - Set is_yuyv=True if your camera captures raw YUYV frames.
         """
         if original_img is None:
@@ -66,7 +66,7 @@ class LettuceDetector:
         actual_crop_w = end_x - start_x
         actual_crop_h = end_y - start_y
         
-        # Extract the middle scanning zone
+        # Extract the middle scanning zone - THIS IS NOW OUR MAIN IMAGE
         cropped_img = original_img[start_y:end_y, start_x:end_x]
         
         # Preprocess and run ONNX inference
@@ -81,27 +81,18 @@ class LettuceDetector:
         
         annotated_img = None
         if draw_results:
-            annotated_img = original_img.copy()
-            # Draw the Blue Scanning Zone box
-            cv2.rectangle(annotated_img, (start_x, start_y), (end_x, end_y), (255, 0, 0), 4)
-            cv2.putText(annotated_img, "Scanning Zone", (start_x + 10, start_y + 40), 
-                        cv2.FONT_HERSHEY_SIMPLEX, 1.5, (255, 0, 0), 3)
+            annotated_img = cropped_img.copy()
+            # Removed the Blue "Scanning Zone" rectangle since the whole image is now the zone
 
         detections_data = []
 
         for i in range(len(scores)):
             if scores[i] >= self.conf_threshold:
-                # Map coordinates back to crop size
-                x1_crop = int(boxes[i][0] * scale_x)
-                y1_crop = int(boxes[i][1] * scale_y)
-                x2_crop = int(boxes[i][2] * scale_x)
-                y2_crop = int(boxes[i][3] * scale_y)
-                
-                # Offset to absolute 4K image position
-                x1 = x1_crop + start_x
-                y1 = y1_crop + start_y
-                x2 = x2_crop + start_x
-                y2 = y2_crop + start_y
+                # Map coordinates back to the crop size ONLY
+                x1 = int(boxes[i][0] * scale_x)
+                y1 = int(boxes[i][1] * scale_y)
+                x2 = int(boxes[i][2] * scale_x)
+                y2 = int(boxes[i][3] * scale_y)
                 
                 label_id = int(labels[i])
                 score = float(scores[i])
@@ -115,7 +106,7 @@ class LettuceDetector:
                 })
                 
                 if draw_results:
-                    # Draw the Green Bounding Box
+                    # Draw the Green Bounding Box directly on the cropped image
                     cv2.rectangle(annotated_img, (x1, y1), (x2, y2), (0, 255, 0), 4)
                     # Draw the Label
                     label_text = f"{class_name}: {score:.2f}"
@@ -123,4 +114,7 @@ class LettuceDetector:
                     cv2.putText(annotated_img, label_text, (x1 + 5, y1 - 10), 
                                 cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 0), 2)
 
-        return detections_data, annotated_img
+        # Return the annotated crop if requested, otherwise return the clean crop
+        final_return_img = annotated_img if draw_results else cropped_img
+        
+        return detections_data, final_return_img
