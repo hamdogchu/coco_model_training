@@ -44,7 +44,7 @@ def perform_wave():
         for f in os.listdir(CAPTURE_DIR): os.remove(os.path.join(CAPTURE_DIR, f))
         for f in os.listdir(PROCESSED_DIR): os.remove(os.path.join(PROCESSED_DIR, f))
             
-        #run_hardware_sequence(CAPTURE_DIR)
+        run_hardware_sequence(CAPTURE_DIR)
         
         print("\n[PHASE 2] Starting AI Inference...")
         ai_results = run_batch_inference(

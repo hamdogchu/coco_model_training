@@ -19,7 +19,7 @@ setup_commands = [
 
 coordinates = [
     ("X0", "Y0"),      
-    ("X0", "Y150"),
+'''    ("X0", "Y150"),
     ("X0", "Y350"),
     ("X0", "Y510"),
     ("X0", "Y670"),
@@ -32,6 +32,7 @@ coordinates = [
     ("X260", "Y350"),
     ("X260", "Y510"),
     ("X260", "Y670") 
+    '''
 ]
 
 def wait_for_idle(ser):
